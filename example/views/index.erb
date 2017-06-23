@@ -1,0 +1,9 @@
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="assets/css/application.css" />
+  </head>
+  <body>
+    <content/>
+    <%= ::Opal::Sprockets.javascript_include_tag('application', sprockets: settings.opal.sprockets, prefix: 'assets', debug: true) %>
+  </body>
+</html>
