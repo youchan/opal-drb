@@ -1,5 +1,5 @@
 module Opal
-  module Drb
+  module DRb
     VERSION = "0.1.0"
   end
 end

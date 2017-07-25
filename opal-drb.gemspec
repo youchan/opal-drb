@@ -5,7 +5,7 @@ require 'opal/drb/version'
 
 Gem::Specification.new do |spec|
   spec.name          = "opal-drb"
-  spec.version       = Opal::Drb::VERSION
+  spec.version       = Opal::DRb::VERSION
   spec.authors       = ["youchan"]
   spec.email         = ["youchan01@gmail.com"]
 
