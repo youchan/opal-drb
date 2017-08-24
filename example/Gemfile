@@ -6,6 +6,7 @@ gem 'thin'
 
 gem 'opal', github: 'youchan/opal', branch: 'marshal-dump-bignum'
 gem 'opal-sprockets', github: 'opal/opal-sprockets'
+gem 'drb-websocket'
 
 gem 'rake'
 gem 'sass'
