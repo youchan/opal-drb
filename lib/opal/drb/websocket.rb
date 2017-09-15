@@ -75,11 +75,79 @@ module DRb
     end
 
     def self.open(uri, config)
-      unless uri =~ /^ws:\/\/(.*?):(\d+)(\?(.*))?$/
+      unless uri =~ /^ws:\/\/(.*?):(\d+)(\/(.*))?$/
         raise(DRbBadScheme, uri) unless uri =~ /^ws:/
         raise(DRbBadURI, 'can\'t parse uri:' + uri)
       end
       ClientSide.new(uri, config)
+    end
+
+    def self.open_server(uri, config)
+      unless uri =~ /^ws:\/\/(.*?):(\d+)(\/(.*))?$/
+        raise(DRbBadScheme, uri) unless uri =~ /^ws:/
+        raise(DRbBadURI, 'can\'t parse uri:' + uri)
+      end
+      Server.new(uri, config)
+    end
+
+    class Server
+      attr_reader :uri
+
+      def initialize(uri, config)
+        @uri = uri
+        @config = config
+      end
+
+      def close
+        u = URI.parse(@uri)
+        RackApp.close("#{u.host}:#{u.port}")
+      end
+
+      def accept
+        ws = ::WebSocket.new(uri)
+        ws.onmessage do |event|
+          stream = StrStream.new(event.data.to_s)
+          server_side = ServerSide.new(stream, @config, uri)
+          yield server_side
+          ws.send(`new Uint8Array(#{server_side.reply.bytes.each_slice(2).map(&:first)}).buffer`)
+        end
+      end
+    end
+
+    class ServerSide
+      attr_reader :uri, :reply
+
+      def initialize(stream, config, uri)
+        @uri = uri
+        @config = config
+        @msg = DRbMessage.new(@config)
+        @req_stream = stream
+      end
+
+      def close
+      end
+
+      def alive?; false; end
+
+      def recv_request
+        begin
+          @msg.recv_request(@req_stream)
+        rescue
+          close
+          raise $!
+        end
+      end
+
+      def send_reply(succ, result)
+        begin
+          stream = StrStream.new
+          @msg.send_reply(stream, succ, result)
+          @reply = stream.buf
+        rescue
+          close
+          raise $!
+        end
+      end
     end
 
     class ClientSide
@@ -87,7 +155,7 @@ module DRb
         @uri = uri
         @res = nil
         @config = config
-        @msg = DRbMessage.new(config)
+        @msg = DRbMessage.new(@config)
         @proxy = ENV['HTTP_PROXY']
       end
 
@@ -101,7 +169,7 @@ module DRb
       def send_request(ref, msg_id, *arg, &b)
         stream = StrStream.new
         @msg.send_request(stream, ref, msg_id, *arg, &b)
-        post(@uri, stream.buf)
+        send(@uri, stream.buf)
       end
 
       def recv_reply(reply_stream)
@@ -109,7 +177,7 @@ module DRb
         @msg.recv_reply(reply_stream)
       end
 
-      def post(uri, data)
+      def send(uri, data)
         promise = Promise.new
         @ws = ::WebSocket.new(uri)
         @ws.onmessage do |event|

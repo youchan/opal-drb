@@ -13,5 +13,7 @@ if RUBY_ENGINE == 'opal'
   require 'opal/drb/drb_conn'
   require 'opal/drb/drb_object'
   require 'opal/drb/drb_message'
+  require 'opal/drb/drb_server'
   require 'opal/drb/drb'
+  require 'opal/drb/invoke_method'
 end

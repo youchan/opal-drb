@@ -30,8 +30,9 @@ module DRb
         @uri, option = DRbProtocol.uri_option(uri, DRb::default_config)
         @ref = DRbURIOption.new(option) unless option.nil?
       else
-        @uri = uri ? uri : nil
+        @uri = uri ? uri : DRb.current_server.uri
         @ref = obj ? DRb.to_id(obj) : nil
+        DRbObject.id2ref[@ref] = obj
       end
     end
 
@@ -45,6 +46,10 @@ module DRb
 
     undef :to_s
     undef :to_a if respond_to?(:to_a)
+
+    def self.id2ref
+      @id2ref ||= {}
+    end
 
     def respond_to?(msg_id, priv=false)
       case msg_id

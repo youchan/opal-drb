@@ -1,6 +1,7 @@
 module DRb
   class DRbMessage
     def initialize(config)
+      config = DRb.default_config.merge(config || {})
       @load_limit = config[:load_limit]
       @argc_limit = config[:argc_limit]
     end

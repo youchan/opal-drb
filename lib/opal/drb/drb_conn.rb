@@ -53,11 +53,4 @@ module DRb
       @protocol.alive?
     end
   end
-
-  def self.default_config
-    {
-      argc_limit: 256,
-      load_limit: 256 * 102400
-    }
-  end
 end

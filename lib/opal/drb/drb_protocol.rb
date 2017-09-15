@@ -9,7 +9,22 @@ module DRb
     end
     module_function :add_protocol
 
-    def open(uri, config, first=true)
+    def open_server(uri, config)
+      @protocol.each do |prot|
+        begin
+          return prot.open_server(uri, config)
+        rescue DRbBadScheme
+        rescue DRbConnError
+          raise($!)
+        rescue
+          raise(DRbConnError, "#{uri} - #{$!.inspect}")
+        end
+      end
+      raise DRbBadURI, 'can\'t parse uri:' + uri
+    end
+    module_function :open_server
+
+    def open(uri, config)
       @protocol.each do |prot|
         begin
           return prot.open(uri, config)
@@ -24,17 +39,13 @@ module DRb
     end
     module_function :open
 
-    def uri_option(uri, config, first=true)
+    def uri_option(uri, config)
       @protocol.each do |prot|
         begin
           uri, opt = prot.uri_option(uri, config)
           return uri, opt
         rescue DRbBadScheme
         end
-      end
-      if first && (config[:auto_load] != false)
-        auto_load(uri)
-        return uri_option(uri, config, false)
       end
       raise DRbBadURI, 'can\'t parse uri:' + uri
     end

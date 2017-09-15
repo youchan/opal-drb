@@ -28,16 +28,6 @@ module DRb
     attr_reader :reason
   end
 
-  class DRbIdConv
-    def to_obj(ref)
-      ObjectSpace._id2ref(ref)
-    end
-
-    def to_id(obj)
-      obj.nil? ? nil : obj.__id__
-    end
-  end
-
   module DRbUndumped
     def _dump(dummy)
       raise TypeError, 'can\'t dump'
@@ -106,4 +96,26 @@ module DRb
     end
   end
 
+  def self.to_obj(ref)
+    DRb::DRbObject.id2ref[ref]
+  end
+
+  def self.to_id(obj)
+    obj.nil? ? nil : obj.__id__
+  end
+
+  def self.current_server
+    @callback_server
+  end
+
+  def self.start_service(uri)
+    @callback_server = DRbServer.new(uri, {})
+  end
+
+  def self.default_config
+    {
+      argc_limit: 256,
+      load_limit: 256 * 102400
+    }
+  end
 end
