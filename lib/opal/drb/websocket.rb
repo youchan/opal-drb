@@ -1,5 +1,6 @@
 require 'native'
 require 'promise'
+require 'securerandom'
 
 class ArrayBuffer
   include Native
@@ -91,6 +92,7 @@ module DRb
         raise(DRbBadScheme, uri) unless uri =~ /^ws:/
         raise(DRbBadURI, 'can\'t parse uri:' + uri)
       end
+
       Server.new(uri, config)
     end
 
@@ -98,7 +100,7 @@ module DRb
       attr_reader :uri
 
       def initialize(uri, config)
-        @uri = uri
+        @uri = "#{uri}/#{SecureRandom.uuid}"
         @config = config
       end
 
@@ -107,7 +109,7 @@ module DRb
       end
 
       def accept
-        ws = ::WebSocket.new(uri)
+        ws = ::WebSocket.new(@uri)
         ws.onmessage do |event|
           stream = StrStream.new(event.data.to_s)
           server_side = ServerSide.new(stream, @config, uri)

@@ -1,15 +1,17 @@
 module DRb
   class DRbServer
-    attr_reader :uri
-
     def initialize(uri)
-      @uri = uri
-      @protocol = DRbProtocol.open_server(@uri)
+      @protocol = DRbProtocol.open_server(uri)
       run
+    end
+
+    def uri
+      @protocol.uri
     end
 
     def run
       @protocol.accept do |client|
+        run
         begin
           succ = false
           invoke_method = InvokeMethod.new(self, client)
