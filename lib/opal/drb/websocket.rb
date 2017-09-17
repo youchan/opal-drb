@@ -29,11 +29,15 @@ class WebSocket
   end
 
   def onmessage
-    add_event_listener('message') {|event| yield MessageEvent.new(event) }
+    add_event_listener('message') {|event| yield MessageEvent.new(event) if self.open? }
   end
 
   def onopen
-    add_event_listener('open') {|event| yield MessageEvent.new(event) }
+    add_event_listener('open') {|event| yield MessageEvent.new(event) if self.open? }
+  end
+
+  def open?
+    `self.native.readyState == 1`
   end
 
   alias_native :close
@@ -99,8 +103,7 @@ module DRb
       end
 
       def close
-        u = URI.parse(@uri)
-        RackApp.close("#{u.host}:#{u.port}")
+        @ws.close
       end
 
       def accept
@@ -189,11 +192,14 @@ module DRb
           end
 
           promise.resolve reply_stream
+
+          @ws.close
         end
 
         @ws.onopen do
           @ws.send(`new Uint8Array(#{data.bytes.each_slice(2).map(&:first)}).buffer`)
         end
+
         promise
       end
     end
