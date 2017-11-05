@@ -156,6 +156,7 @@ module DRb
         @config = config
         @msg = DRbMessage.new(@config)
         @req_stream = stream
+        @sender_id = SecureRandom.uuid
       end
 
       def close
@@ -191,10 +192,7 @@ module DRb
         @res = nil
         @config = config
         @msg = DRbMessage.new(@config)
-        @proxy = ENV['HTTP_PROXY']
-      end
-
-      def close
+        @sender_id = SecureRandom.uuid
       end
 
       def alive?
@@ -208,28 +206,39 @@ module DRb
       end
 
       def recv_reply(reply_stream)
-        @ws.close
         @msg.recv_reply(reply_stream)
       end
 
       def send(uri, data)
         promise = Promise.new
-        @ws = ::WebSocket.new(uri)
         @ws.onmessage do |event|
+          message_data = event.data.to_s
+          sender_id = message_data.slice(0, 36)
+          message = message_data.slice(36, message_data.length - 36)
+
+          unless sender_id == @sender_id
+            next
+          end
+
           reply_stream = StrStream.new
-          reply_stream.write(event.data.to_s)
+          reply_stream.write(message.to_s)
 
           if @config[:load_limit] < reply_stream.buf.size
             raise TypeError, 'too large packet'
           end
 
           promise.resolve reply_stream
-
-          @ws.close
         end
 
-        @ws.onopen do
-          @ws.send(`new Uint8Array(#{data.bytes.each_slice(2).map(&:first)}).buffer`)
+        byte_data = @sender_id.bytes.each_slice(2).map(&:first)
+        byte_data += data.bytes.each_slice(2).map(&:first)
+
+        if @ws.connecting?
+          @ws.onopen do
+            @ws.send(`new Uint8Array(#{byte_data}).buffer`)
+          end
+        else
+          @ws.send(`new Uint8Array(#{byte_data}).buffer`)
         end
 
         promise
