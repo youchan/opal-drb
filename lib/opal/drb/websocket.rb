@@ -34,11 +34,27 @@ class WebSocket
   end
 
   def onopen
-    add_event_listener('open') {|event| yield MessageEvent.new(event) if self.open? }
+    add_event_listener('open') {|event| yield Native(event) }
+  end
+
+  def onclose
+    add_event_listener('close') {|event| yield Native(event) }
+  end
+
+  def connecting?
+    `#@native.readyState === 0`
   end
 
   def open?
-    `self.native.readyState == 1`
+    `#@native.readyState === 1`
+  end
+
+  def closing?
+    `#@native.readyState === 2`
+  end
+
+  def closed?
+    `#@native.readyState === 3`
   end
 
   alias_native :close
