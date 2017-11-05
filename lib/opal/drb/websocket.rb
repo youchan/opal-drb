@@ -72,6 +72,18 @@ end
 
 module DRb
   module WebSocket
+    class SocketPool
+      def initialize
+        @sockets = {}
+        @proxy = ENV['HTTP_PROXY']
+      end
+
+      def open(uri)
+        @sockets[uri] ||= ::WebSocket.new(uri)
+      end
+
+      alias_method :[], :open
+    end
     class StrStream
       def initialize(str='')
         @buf = str
@@ -96,11 +108,12 @@ module DRb
     end
 
     def self.open(uri, config)
+      @pool ||= SocketPool.new
       unless uri =~ /^ws:\/\/(.*?):(\d+)(\/(.*))?$/
         raise(DRbBadScheme, uri) unless uri =~ /^ws:/
         raise(DRbBadURI, 'can\'t parse uri:' + uri)
       end
-      ClientSide.new(uri, config)
+      ClientSide.new(uri, @pool[uri], config)
     end
 
     def self.open_server(uri, config)
@@ -172,8 +185,9 @@ module DRb
     end
 
     class ClientSide
-      def initialize(uri, config)
+      def initialize(uri, ws, config)
         @uri = uri
+        @ws = ws
         @res = nil
         @config = config
         @msg = DRbMessage.new(@config)
@@ -184,7 +198,7 @@ module DRb
       end
 
       def alive?
-        false
+        !!@ws && @ws.open?
       end
 
       def send_request(ref, msg_id, *arg, &b)
