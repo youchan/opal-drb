@@ -27,18 +27,29 @@ class WebSocket
   def initialize(url)
     super `new WebSocket(url)`
     `self.native.binaryType = 'arraybuffer'`
+    @listeners = {}
   end
 
-  def onmessage
-    add_event_listener('message') {|event| yield MessageEvent.new(event) if self.open? }
+  def onmessage(&block)
+    listener = Proc.new {|event| yield MessageEvent.new(event) if self.open? }
+    @listeners[block] = [:message, listener]
+    add_event_listener('message', &listener)
   end
 
-  def onopen
-    add_event_listener('open') {|event| yield Native(event) }
+  def onopen(&block)
+    listener = Proc.new {|event| yield Native(event) }
+    @listeners[block] = [:open, listener]
+    add_event_listener('open', &listener)
   end
 
-  def onclose
-    add_event_listener('close') {|event| yield Native(event) }
+  def onclose(&block)
+    listener = Proc.new {|event| yield Native(event) }
+    @listeners[block] = [:close, listener]
+    add_event_listener('close', &listener)
+  end
+
+  def off handler
+    remove_event_listener(*@listeners[handler])
   end
 
   def connecting?
@@ -60,6 +71,7 @@ class WebSocket
   alias_native :close
   alias_native :send
   alias_native :add_event_listener, :addEventListener
+  alias_native :remove_event_listener, :removeEventListener
 
   class MessageEvent
     include Native
@@ -199,6 +211,10 @@ module DRb
         !!@ws && @ws.open?
       end
 
+      def close
+        @ws = nil
+      end
+
       def send_request(ref, msg_id, *arg, &b)
         stream = StrStream.new
         @msg.send_request(stream, ref, msg_id, *arg, &b)
@@ -211,7 +227,7 @@ module DRb
 
       def send(uri, data)
         promise = Promise.new
-        @ws.onmessage do |event|
+        event_handler = Proc.new do |event|
           message_data = event.data.to_s
           sender_id = message_data.slice(0, 36)
           message = message_data.slice(36, message_data.length - 36)
@@ -228,8 +244,9 @@ module DRb
           end
 
           promise.resolve reply_stream
+          @ws.off(event_handler)
         end
-
+        @ws.onmessage &event_handler
         byte_data = @sender_id.bytes.each_slice(2).map(&:first)
         byte_data += data.bytes.each_slice(2).map(&:first)
 
