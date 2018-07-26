@@ -152,10 +152,16 @@ module DRb
       def accept
         ws = ::WebSocket.new(@uri)
         ws.onmessage do |event|
-          stream = StrStream.new(event.data.to_s)
+          message_data = event.data.to_s
+          sender_id = message_data.slice(0, 36)
+          message = message_data.slice(36, message_data.length - 36)
+          stream = StrStream.new(message)
           server_side = ServerSide.new(stream, @config, uri)
           yield server_side
-          ws.send(`new Uint8Array(#{server_side.reply.bytes.each_slice(2).map(&:first)}).buffer`)
+
+          send_data = sender_id.bytes.each_slice(2).map(&:first)
+          send_data += server_side.reply.bytes.each_slice(2).map(&:first)
+          ws.send(`new Uint8Array(#{send_data}).buffer`)
         end
       end
     end
@@ -246,7 +252,7 @@ module DRb
           promise.resolve reply_stream
           @ws.off(event_handler)
         end
-        @ws.onmessage &event_handler
+        @ws.onmessage(&event_handler)
         byte_data = @sender_id.bytes.each_slice(2).map(&:first)
         byte_data += data.bytes.each_slice(2).map(&:first)
 
