@@ -4,7 +4,7 @@ gem 'sinatra'
 gem 'sinatra-contrib'
 gem 'thin'
 
-gem 'opal', github: 'youchan/opal', branch: 'marshal-dump-bignum'
+gem 'opal'
 gem 'opal-sprockets', github: 'opal/opal-sprockets'
 gem 'drb-websocket'
 
