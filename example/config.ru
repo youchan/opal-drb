@@ -16,10 +16,6 @@ app = Rack::Builder.app do
   map '/assets' do
     run Server::OPAL.sprockets
   end
-
-  map '/__OPAL_SOURCE_MAPS__' do
-    run Opal::SourceMapServer.new(Server::OPAL.sprockets, '/__OPAL_SOURCE_MAPS__')
-  end
 end
 
 require_relative './drb_server'
