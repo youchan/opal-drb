@@ -6,7 +6,7 @@ if development?
 end
 
 class Server < Sinatra::Base
-  OPAL = Opal::Server.new do |server|
+  OPAL = Opal::Sprockets::Server.new do |server|
     server.append_path 'app'
     server.append_path 'assets'
     server.append_path '../lib'

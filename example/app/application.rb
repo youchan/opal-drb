@@ -2,13 +2,25 @@ require 'opal'
 require 'native'
 require 'opal/drb'
 
-puts ">>>>>>>> Example"
+obj = DRb::DRbObject.new_with_uri "ws://127.0.0.1:1234"
+DRb.start_service("ws://127.0.0.1:1234/callback")
 
-remote = DRb::DRbObject.new_with_uri "ws://127.0.0.1:1234"
+def interval(interval, &func)
+  %x(
+    setInterval(func, interval);
+  )
+end
 
-promise = remote.get
-promise.then do |obj|
-  obj.test.then do |res|
-    puts res
-  end
+obj.test.then do |res|
+  puts res
+end
+
+obj.add_callback do |text|
+  puts text
+end
+
+i = 0
+interval(1000) do
+  obj.notify("notification #{i}")
+  i += 1
 end

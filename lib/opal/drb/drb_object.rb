@@ -44,11 +44,12 @@ module DRb
       @ref
     end
 
-    undef :to_s
-    undef :to_a if respond_to?(:to_a)
-
     def self.id2ref
       @id2ref ||= {}
+    end
+
+    def inspect
+      @ref && @ref.inspect
     end
 
     def respond_to?(msg_id, priv=false)
@@ -58,7 +59,7 @@ module DRb
       when :marshal_dump
         false
       else
-        method_missing(:respond_to?, msg_id, priv)
+        false
       end
     end
 

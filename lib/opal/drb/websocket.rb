@@ -85,17 +85,33 @@ end
 module DRb
   module WebSocket
     class SocketPool
-      def initialize
-        @sockets = {}
-        @proxy = ENV['HTTP_PROXY']
+      attr_reader :uri, :ws
+
+      def initialize(uri, ws)
+        @uri = uri
+        @ws = ws
       end
 
-      def open(uri)
-        @sockets[uri] ||= ::WebSocket.new(uri)
+      def self.open(uri)
+        @sockets ||= {}
+        @sockets[uri] ||= new_connection(uri)
       end
 
-      alias_method :[], :open
+      def self.new_connection(uri)
+        ws = ::WebSocket.new(uri)
+
+        ws.onclose do
+          @sockets[uri] = new_connection(uri)
+        end
+
+        self.new(uri, ws)
+      end
+
+      def [](uri)
+        @sockets[uri].ws
+      end
     end
+
     class StrStream
       def initialize(str='')
         @buf = str
@@ -120,12 +136,11 @@ module DRb
     end
 
     def self.open(uri, config)
-      @pool ||= SocketPool.new
       unless uri =~ /^ws:\/\/(.*?):(\d+)(\/(.*))?$/
         raise(DRbBadScheme, uri) unless uri =~ /^ws:/
         raise(DRbBadURI, 'can\'t parse uri:' + uri)
       end
-      ClientSide.new(uri, @pool[uri], config)
+      ClientSide.new(uri, config)
     end
 
     def self.open_server(uri, config)
@@ -143,26 +158,38 @@ module DRb
       def initialize(uri, config)
         @uri = "#{uri}/#{SecureRandom.uuid}"
         @config = config
+        reconnect
       end
 
       def close
         @ws.close
       end
 
-      def accept
-        ws = ::WebSocket.new(@uri)
-        ws.onmessage do |event|
+      def reconnect
+        @ws.close if @ws
+
+        @ws = ::WebSocket.new(@uri)
+
+        @ws.onclose do |event|
+          reconnect
+        end
+
+        @ws.onmessage do |event|
           message_data = event.data.to_s
           sender_id = message_data.slice(0, 36)
           message = message_data.slice(36, message_data.length - 36)
           stream = StrStream.new(message)
           server_side = ServerSide.new(stream, @config, uri)
-          yield server_side
+          @accepter.call server_side
 
           send_data = sender_id.bytes.each_slice(2).map(&:first)
           send_data += server_side.reply.bytes.each_slice(2).map(&:first)
-          ws.send(`new Uint8Array(#{send_data}).buffer`)
+          @ws.send(`new Uint8Array(#{send_data}).buffer`)
         end
+      end
+
+      def accept(&block)
+        @accepter = block
       end
     end
 
@@ -204,9 +231,9 @@ module DRb
     end
 
     class ClientSide
-      def initialize(uri, ws, config)
+      def initialize(uri, config)
         @uri = uri
-        @ws = ws
+        @pool =  SocketPool.open(uri)
         @res = nil
         @config = config
         @msg = DRbMessage.new(@config)
@@ -214,11 +241,10 @@ module DRb
       end
 
       def alive?
-        !!@ws && @ws.open?
+        !!@pool.ws && @pool.ws.open?
       end
 
       def close
-        @ws = nil
       end
 
       def send_request(ref, msg_id, *arg, &b)
@@ -250,18 +276,18 @@ module DRb
           end
 
           promise.resolve reply_stream
-          @ws.off(event_handler)
+          @pool.ws.off(event_handler)
         end
-        @ws.onmessage(&event_handler)
+        @pool.ws.onmessage(&event_handler)
         byte_data = @sender_id.bytes.each_slice(2).map(&:first)
         byte_data += data.bytes.each_slice(2).map(&:first)
 
-        if @ws.connecting?
-          @ws.onopen do
-            @ws.send(`new Uint8Array(#{byte_data}).buffer`)
+        if @pool.ws.connecting?
+          @pool.ws.onopen do
+            @pool.ws.send(`new Uint8Array(#{byte_data}).buffer`)
           end
         else
-          @ws.send(`new Uint8Array(#{byte_data}).buffer`)
+          @pool.ws.send(`new Uint8Array(#{byte_data}).buffer`)
         end
 
         promise
