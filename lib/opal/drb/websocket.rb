@@ -90,6 +90,14 @@ module DRb
       def initialize(uri, ws)
         @uri = uri
         @ws = ws
+        @handlers = {}
+
+        ws.onmessage do |event|
+          message_data = event.data.to_s
+          sender_id = message_data.slice(0, 36)
+          message = message_data.slice(36, message_data.length - 36)
+          @handlers.delete(sender_id).call(message)
+        end
       end
 
       def self.open(uri)
@@ -105,6 +113,21 @@ module DRb
         end
 
         self.new(uri, ws)
+      end
+
+      def send(data, &block)
+        sender_id = SecureRandom.uuid
+        @handlers[sender_id] = block
+        byte_data = sender_id.bytes.each_slice(2).map(&:first)
+        byte_data += data.bytes.each_slice(2).map(&:first)
+
+        if @ws.connecting?
+          @ws.onopen do
+            @ws.send(`new Uint8Array(#{byte_data}).buffer`)
+          end
+        else
+          @ws.send(`new Uint8Array(#{byte_data}).buffer`)
+        end
       end
 
       def [](uri)
@@ -201,7 +224,6 @@ module DRb
         @config = config
         @msg = DRbMessage.new(@config)
         @req_stream = stream
-        @sender_id = SecureRandom.uuid
       end
 
       def close
@@ -237,7 +259,6 @@ module DRb
         @res = nil
         @config = config
         @msg = DRbMessage.new(@config)
-        @sender_id = SecureRandom.uuid
       end
 
       def alive?
@@ -259,15 +280,7 @@ module DRb
 
       def send(uri, data)
         promise = Promise.new
-        event_handler = Proc.new do |event|
-          message_data = event.data.to_s
-          sender_id = message_data.slice(0, 36)
-          message = message_data.slice(36, message_data.length - 36)
-
-          unless sender_id == @sender_id
-            next
-          end
-
+        @pool.send(data) do |message|
           reply_stream = StrStream.new
           reply_stream.write(message.to_s)
 
@@ -276,20 +289,7 @@ module DRb
           end
 
           promise.resolve reply_stream
-          @pool.ws.off(event_handler)
         end
-        @pool.ws.onmessage(&event_handler)
-        byte_data = @sender_id.bytes.each_slice(2).map(&:first)
-        byte_data += data.bytes.each_slice(2).map(&:first)
-
-        if @pool.ws.connecting?
-          @pool.ws.onopen do
-            @pool.ws.send(`new Uint8Array(#{byte_data}).buffer`)
-          end
-        else
-          @pool.ws.send(`new Uint8Array(#{byte_data}).buffer`)
-        end
-
         promise
       end
     end

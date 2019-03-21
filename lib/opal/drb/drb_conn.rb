@@ -39,7 +39,7 @@ module DRb
 
     def send_message(ref, msg_id, arg, b, &callback)
       @protocol.send_request(ref, msg_id, arg, b).then do |stream|
-        yield @protocol.recv_reply stream
+        callback.call(@protocol.recv_reply(stream))
       end
     end
 
