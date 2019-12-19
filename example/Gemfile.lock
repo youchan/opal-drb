@@ -36,7 +36,7 @@ GEM
       tilt (>= 1.4)
     parser (2.3.3.1)
       ast (~> 2.2)
-    rack (2.0.6)
+    rack (2.0.8)
     rack-protection (2.0.4)
       rack
     rake (12.3.1)
